@@ -1,0 +1,5 @@
+archive/*
+data/*
+get_*/*
+*.mexmaca64
+.DS_Store
