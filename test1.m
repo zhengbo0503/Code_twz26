@@ -1,94 +1,97 @@
-clc; clear; rng(1);
+%TEST1 - forward accuracy test, changing condition number
 
-% Arguments
-M = ones(20,1)*1000;
-N = round(logspace(1,3,20)); 
+clc; close all; clear; rng(1);
 
-for i = 1:length(M)
-    % Set parameters
-    m = M(i);
-    n = N(i);
-    
-    % Setup matrices, preconditioners
-    A = gallery('randsvd', [m,n], 1e10, 3); % Random matrix
-	[~,~,Vs] = svd(single(A));
-	Vd = double(Vs);
-	[Vt,~] = qr(Vd,'econ'); 
-    
-    % Way 1 -- preconditioning then QR
-    % Preprocessing
-    At1 = A*Vt; 
-    [Qt1,Rt1] = qr(At1,'econ');
-    % Jacobi
-    % A,joba,jobu,jobv,mv,V0,lwork
-    % [Aout,S,V,sva,work,info]
-    [UR1,S1,VR1,sva1,work1,info1] = ...
-        dgesvj_mex(Rt1, 'U', 'U', 'V', size(Rt1,1), [], size(Rt1,1)+size(Rt1,2), []);
-    if info1 ~= 0
-        warn("Jacobi on way 1 not converged\n");
-        return
+m = 1000;
+n = 800;
+epsln = eps('double')/2;
+kkappa = logspace(3,15,20);
+f1 = zeros(length(m), 5);
+f2 = zeros(length(m), 5);
+f3 = zeros(length(m), 5);
+f4 = zeros(length(m), 5);
+bound1 = zeros(length(m),5);
+bound2 = zeros(length(m),5);
+
+for mode = 1:5
+
+    for i = 1:length(kkappa)
+
+        mm = m;
+        nn = n;
+        kappa = kkappa(i); 
+
+        A = gallery('randsvd', [mm,nn], kappa, mode);
+
+        [U1,S1,V1,nos1,scnd] = mposj(A);
+        [f1(i,mode),~,~,~] = compute_error(A, U1, S1, V1);
+
+        [U2,S2,V2,sva2,work2,info2] = dgesvj_mex(A,'G','U','V',nn,eye(nn),max(6,mm+nn));
+        if info2 ~= 0
+            fprintf("Error: DGESVJ does not converge.\n");
+            break;
+        end
+        [f2(i,mode),~,~,~] = compute_error(A, U2, S2, V2);
+
+        [U3,S3,V3,sva3,work3,iwork3,info3] = dgejsv_mex(A,'C','U','V','R','N','N');
+        if info3 ~= 0
+            fprintf("Error: DGEJSV does not converge.\n");
+            break;
+        end
+        [f3(i,mode),~,~,~] = compute_error(A, U3, S3, V3);
+
+        [U4,S4,V4] = svd(A,'econ');
+        [f4(i,mode),~,~,~] = compute_error(A, U4, S4, V4);
+
+        bound1(i,mode) = scond(A) * sqrt(mm * nn)* epsln;
+        bound2(i,mode) = scnd * sqrt(mm * nn) * epsln;
+
+        fprintf("Finished MODE = %d, %d of %d\n", mode, i, length(kkappa));
+
     end
-    nos1(i) = work1(4);
-    % Postprocessing
-    U1 = Qt1*UR1;
-    V1 = Vt*VR1;
-    % Compute error
-    [f1(i), r1(i), oU1(i), oV1(i)] = compute_error(A, U1, S1, V1);
-
-
-    % Way 2 -- QR then preconditioning
-    % preprocessing
-    [Q2,R2] = qr(A,'econ');
-    Rt2 = R2*Vt;
-    % Jacobi
-    [UR2,S2,VR2,sva2,work2,info2] = ...
-        dgesvj_mex(Rt2, 'G', 'U', 'V', size(Rt2,1), [], size(Rt2,1)+size(Rt2,2), []);
-    if info2 ~= 0
-        warn("Jacobi on way 2 not converged\n");
-        return
-    end
-    nos2(i) = work2(4); 
-    % Postprocessing
-    U2 = Q2*UR2;
-    V2 = Vt*VR2;
-    % Compute error
-    [f2(i), r2(i), oU2(i), oV2(i)] = compute_error(A, U2, S2, V2);
-
-    % Printout
-    fprintf("Iteration %d of %d\n", i, length(M)); 
-
 end
 
-%% Plot
+savedata = 1;
+if savedata == 1
+    save("./data/fwderr_diff_cond.mat");
+end
 
-figure(1)
-semilogy(N, f1,'x'); hold on;
-loglog(N, f2,'o');
-legend('precondition -- QR', 'QR -- precondition', location='northwest')
-title('fwd error');
-xlabel('No. of cols')
-axis square
+%% 
+close all; 
+C1 = "#1171BE";
+C2 = "#DD5400";
+C3 = "#EDB120";
+C4 = "#3BAA32";
+    
 
-figure(2)
-loglog(N, r1,'x'); hold on;
-loglog(N, r2,'o');
-legend('precondition -- QR', 'QR -- precondition', location='northwest')
-title('residual error');
-xlabel('No. of cols')
-axis square
+for mode = 1:5
+    figure(mode)
+    
+    % %%%%%%%%%%%%%%%%%%
+    loglog(kkappa,f1(:,mode),'LineStyle','none','Marker','*', 'Color', C1); hold on;
+    loglog(kkappa,f2(:,mode),'LineStyle','none','Marker','pentagram', 'Color', C2);
+    loglog(kkappa,f3(:,mode),'LineStyle','none','Marker','square', 'Color', C3);
+    loglog(kkappa,f4(:,mode),'LineStyle','none','Marker','diamond', 'Color', C4);
+    loglog(kkappa,bound1(:,mode),'LineStyle','--','Marker', 'none', 'Color','k');
+    loglog(kkappa,bound2(:,mode),'LineStyle',':','Marker', 'none', 'Color','k');
+    set(findall(gcf, 'Type', 'Line'), 'LineWidth', 1);
+    % %%%%%%%%%%%%%%%%%%
 
-figure(3)
-loglog(N, max(oU1, oV1),'x'); hold on;
-loglog(N, max(oU2, oV2),'o');
-legend('precondition -- QR', 'QR -- precondition', location='northwest')
-title('orth error');
-xlabel('No. of cols')
-axis square
+    axis square
+    
+    xlabel('Condition number $\kappa_2(A)$','FontSize',10);
+    xlim([1e3,1e15]);
+    xticks([1e3,1e6,1e9,1e12,1e15]);
+    ylim([1e-16,1e2]);
+    yticks([1e-16, 1e-13, 1e-10,1e-7,1e-4, 1e-1, 1e2]);
+    
+    % Only get ylabel if the subplot is on the left
+    if mod(mode,2) == 1
+        ylabel('$\mathrm{max}_k {\varepsilon}^{(k)}_{fwd}$','FontSize',10);
+    end
 
-figure(4)
-semilogx(N, nos1,'x'); hold on;
-semilogx(N, nos2,'o');
-legend('precondition -- QR', 'QR -- precondition', location='northwest')
-title('no. of sweeps');
-xlabel('No. of cols')
-axis square
+    % Set the title 
+    alphabet = ['a','b','c','d','e'];
+    t = sprintf('(%s) MODE = %d', alphabet(mode), mode); 
+    title(t, 'FontWeight', 'normal', 'FontSize', 10); 
+end

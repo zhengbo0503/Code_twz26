@@ -1,97 +1,92 @@
-%TEST2 -- timing test
-%	This is a test script for accessing the speed of four different algorithms
-%	that relates to the one-sided Jacobi algorithm
-%	 - mixed-precision preconditioned Jacobi algorithm (mposj) : Our algorithm,
-%	 - DGESVJ : LAPACK routine for the one-sided Jacobi algorithm, and
-%	 - DGEJSV : LAPACK routine for the QR-preconditioned one-sided Jacobi algorithm.
-%	 - svd : MATLAB function for computing the SVD.
+%TEST2 -- forward accuracy test, changing number of columns
 
 clc; close all; clear; rng(1);
+
+m = ones(15,1)*1000;
+n = round(logspace(1,3,15));
+epsln = eps('double')/2;
+kappa = 1e8;
+f1 = zeros(length(m), 5);
+f2 = zeros(length(m), 5);
+f3 = zeros(length(m), 5);
+f4 = zeros(length(m), 5);
+bound1 = zeros(length(m),5);
+bound2 = zeros(length(m),5);
+
+for mode = 1:5
+
+    for i = 1:length(m)
+
+        mm = m(i);
+        nn = n(i);
+        A = gallery('randsvd', [mm,nn], kappa, mode);
+
+        [U1,S1,V1,nos1,scnd] = mposj(A);
+        [f1(i,mode),~,~,~] = compute_error(A, U1, S1, V1);
+
+        [U2,S2,V2,sva2,work2,info2] = dgesvj_mex(A,'G','U','V',nn,eye(nn),max(6,mm+nn));
+        if info2 ~= 0
+            fprintf("Error: DGESVJ does not converge.\n");
+            break;
+        end
+        [f2(i,mode),~,~,~] = compute_error(A, U2, S2, V2);
+
+        [U3,S3,V3,sva3,work3,iwork3,info3] = dgejsv_mex(A,'C','U','V','R','N','N');
+        if info3 ~= 0
+            fprintf("Error: DGEJSV does not converge.\n");
+            break;
+        end
+        [f3(i,mode),~,~,~] = compute_error(A, U3, S3, V3);
+
+        [U4,S4,V4] = svd(A,'econ');
+        [f4(i,mode),~,~,~] = compute_error(A, U4, S4, V4);
+
+        bound1(i,mode) = scond(A) * sqrt(mm * nn)* epsln;
+        bound2(i,mode) = scnd * sqrt(mm * nn) * epsln;
+
+        fprintf("Finished MODE = %d, %d of %d\n", mode, i, length(m));
+
+    end
+end
+
 savedata = 1;
-printout = 0; 
-
-n = 400;
-m = round(logspace(log10(500), log10(3000), 20));
-t_mp = zeros(length(m),1);
-t_j = zeros(length(m),1);
-t_qrj = zeros(length(m),1);
-t_matlab = zeros(length(m),1);
-
-for i = 1:length(m)
-
-    mm = m(i);
-    nn = n;
-    A = gallery('randsvd', [mm,nn], 1e6);
-
-    % [U,S,V,nos,time] =
-    f1 = @() mposj(A);
-    f1(); 
-    tmp1 = timeit(f1, 3);
-    tmp2 = timeit(f1, 3);
-    t_mp(i) = (tmp1 + tmp2)/2;
-    
-    % [Uj1,Sj1,Vj1,svaj1,workj1,infoj1] =
-    f2 = @() dgesvj_mex(A,'G','U','V',nn,eye(nn),max(6,mm+nn));
-    f2(); 
-    tmp1 = timeit(f2, 6);
-    tmp2 = timeit(f2, 6);
-    t_j(i) = (tmp1+tmp2)/2;
-
-    % [Uj2,Sj2,Vj2,svaj2,workj2,iworkj2,infoj2] =
-    f3 = @() dgejsv_mex(A,'C','U','V','R','N','N');
-    f3(); 
-    tmp1 = timeit(f3, 7);
-    tmp2 = timeit(f3, 7);
-    t_qrj(i) = (tmp1+tmp2)/2;
-
-    % [Uj3,Sj3,Vj3] =
-    f4 = @() svd(A,'econ');
-    f4(); 
-    tmp1 = timeit(f4, 3);
-    tmp2 = timeit(f4, 3);
-    t_matlab(i) = (tmp1+tmp2)/2;
-
-    fprintf("Finished %d of %d \n", i, length(m));
-    
-end
-
 if savedata == 1
-    save('data/timing.mat');
+    save("./data/fwderr_diff_cols.mat")
 end
 
-%%
+
+%% 
 close all; 
-set(gcf, 'Units','inches', 'Position',[1 1 7 7]);  % [left bottom width height]
 
-okabeito = [
-    0.000 0.000 0.000  % black
-    0.902 0.624 0.000  % orange
-    0.337 0.706 0.914  % sky blue
-    0.000 0.620 0.451  % bluish green
-    0.941 0.894 0.259  % yellow
-    0.000 0.447 0.698  % blue
-    0.835 0.369 0.000  % vermillion
-    0.800 0.475 0.655  % reddish purple
-];
+C1 = "#1171BE";
+C2 = "#DD5400";
+C3 = "#EDB120";
+C4 = "#3BAA32";
 
-semilogx(m, t_mp,'LineStyle','-','Marker','*'); hold on;
-semilogx(m, t_j,'LineStyle','-','Marker','x');
-semilogx(m, t_qrj,'LineStyle','-','Marker','square');
-semilogx(m, t_matlab,'LineStyle','-','Marker','diamond');
+for mode = 1:5
+    figure(mode)
+    
+    loglog(n,f1(:,mode),'LineStyle','none','Marker','*','Color',C1);
+    hold on;
+    loglog(n,f2(:,mode),'LineStyle','none','Marker','pentagram','Color',C2);
+    loglog(n,f3(:,mode),'LineStyle','none','Marker','square','Color',C3);
+    loglog(n,f4(:,mode),'LineStyle','none','Marker','diamond','Color',C4);
+    loglog(n,bound2(:,mode),'LineStyle',':','Marker','none','Color','k');
+    set(findall(gcf, 'Type', 'Line'), 'LineWidth', 1);
+    %
 
-axis square
-set(findall(gcf, 'Type', 'Line'), 'LineWidth', 2);
-xlabel('Number of row'); 
-ylabel('Runtime'); 
-xticks([500,1000,1750,3000]); 
+    axis square
+    xlim([10,1000]);
+    xlabel('$n$', 'FontSize', 10);
+    yticks([1e-16,1e-13,1e-10,1e-7,1e-4])
+    ylim([1e-16, 1e-4]);
+    % Only get ylabel if the subplot is on the left
+    if mod(mode,2) == 1
+        ylabel('$\mathrm{max}_k {\varepsilon}^{(k)}_{fwd}$', 'FontSize', 10);
+    end
 
-legend('MP3JacobiSVD', ...
-    '\texttt{DGESVJ}', ...
-    '\texttt{DGEJSV}', ...
-    'MATLAB \texttt{svd}', ...
-    'Interpreter','latex', 'Location', 'northwest');
-
-%%
-if printout == 1
-    myprint('timing');
+    % Set the title 
+    alphabet = ['a','b','c','d','e'];
+    t = sprintf('(%s) MODE = %d', alphabet(mode), mode); 
+    title(t, 'FontWeight', 'normal', 'FontSize', 10); 
 end

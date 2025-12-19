@@ -1,18 +1,21 @@
-function [U,S,V,nos,scalecond] = mposj(G, nop)
-%MPOSJ - Mixed precision one-sided Jacobi algorithm 
+function [U,S,V,nos,scalecond,timing] = mposj(G, nop)
+%MPOSJ - Mixed precision one-sided Jacobi algorithm
+%		 using quadruple, double and single precisions
 %
 %   Usage:
 %       [U,S,V] = mposj(G)
 %       [U,S,V,nos] = mposj(G)
-%       [U,S,V,nos,scalecond] = mposj(G, nop)
+%       [U,S,V,nos,scalecond,timing] = mposj(G)
+%       [U,S,V] = mposj(G, nop)
 %
 %   Purpose: 
 %       MPOSJ computes a SVD of a general matrix based on LAPACK routine
-%       DGESVJ, the QR-preconditioned Jacobi SVD algorithm. 
+%       DGESVJ, the one-sided Jacobi SVD algorithm. 
 %       MPOSJ first computes a preconditioner at single precision, applies
 %       the preconditioner at double or quadruple precision, and finally
-%       performs DGESVJ on the preconditioned matrix. 
-%       For ill-conditioned matrix, MPOSJ can compute singular values with
+%       performs DGESVJ on the preconditioned matrix at double precision. 
+%
+%		For ill-conditioned matrix, MPOSJ can compute singular values with
 %       smaller relative forward error compared to MATLAB function svd.
 %
 %   Arguments: 
@@ -32,11 +35,19 @@ function [U,S,V,nos,scalecond] = mposj(G, nop)
 %           Number of sweep used by DGESVJ.
 %       (3) scalecond - Real, double.
 %           Scaled condition number of the preconditioned matrix. Useful
-%           for some posterior analysis. 
+%           for some posterior analysis.
+%		(4) timing - Real, double vector
+%			The runtime measure for four different components:
+%			  (i) constructing the preconditioner,
+%			 (ii) applying the preconditioner,
+%			(iii) applying the Jacobi algorithm, and
+%			 (iv) everything else.
 %
 %   Author:
-%       Zhengbo Zhou, Manchester, UK, 2025 Oct.
+%       Zhengbo Zhou, Manchester, UK, Dec 2025
 %
+
+t_total = tic;
 
 [m,n] = size(G);
 if m < n   
@@ -54,21 +65,34 @@ end
 idty = eye(n);
 doqr = (m >= (11*n)/6); % Consistent with LAPACK choice. 
 
+t_construct_preconditioner = tic;
+
 % Compute the preconditioner
 [~,~,Vs] = svd(single(G),'econ');
 [Vd,~] = qr(double(Vs));
 
+t_construct_preconditioner = toc(t_construct_preconditioner);
+
+t_apply_preconditioner = tic;
+
 % Apply the preconditioner
 if nop == 3
-    Gt = double(mp(G)*mp(Vd));
+    Gmp = mp(G); 
+    Vdmp = mp(Vd); 
+    Gt = Gmp*Vdmp; 
+    Gt = double(Gt); 
 else
     Gt = G*Vd; 
 end
 
+t_apply_preconditioner = toc(t_apply_preconditioner);
+
 % Output scaled condition number for posterior analysis. 
-if nargout == 5
+if nargout >= 5
     scalecond = scond(Gt); 
 end
+
+t_Jacobi = tic; 
 
 % Apply the one-sided Jacobi
 if doqr % Apply QR factorization before doing Jacobi SVD
@@ -85,6 +109,8 @@ else % Plain Jacobi SVD
     nos = work(4);
 end
 
+t_Jacobi = toc(t_Jacobi);
+
 if info < 0
     error("DGESVJ has invalid inputs.\n");
 elseif info > 0
@@ -92,4 +118,9 @@ elseif info > 0
 end
 
 V = Vd*V;
+t_total = toc(t_total);
+t_else = t_total - t_construct_preconditioner - t_apply_preconditioner - t_Jacobi;
+
+timing = [t_construct_preconditioner, t_apply_preconditioner, t_Jacobi, t_else];
+
 end

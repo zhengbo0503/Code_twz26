@@ -1,137 +1,118 @@
-%TEST3 -- forward accuracy test, changing matrix size
-%	This is a test script for accessing the forward accuracy of four different algorithms
-%	that relates to the one-sided Jacobi algorithm
-%	 - mixed-precision preconditioned Jacobi algorithm (mposj) : Our algorithm,
-%	 - DGESVJ : LAPACK routine for the one-sided Jacobi algorithm, and
-%	 - DGEJSV : LAPACK routine for the QR-preconditioned one-sided Jacobi algorithm.
-%	 - svd : MATLAB function for computing the SVD.
+%TEST2 -- timing test, changing number of cols 
 
 clc; close all; clear; rng(1);
-savedata = 1;
-printout = 0;
 
-n = 400;
-m = round(logspace(log10(500), log10(3000), 20));
-epsln = eps('double')/2;
-kappa = 1e8;
-f1 = zeros(length(m), 5);
-f2 = zeros(length(m), 5);
-f3 = zeros(length(m), 5);
-f4 = zeros(length(m), 5);
-bound1 = zeros(length(m),5);
-bound2 = zeros(length(m),5);
+m = 3000*ones(10,1); 
+n = round(logspace(2, log10(3000), 10));
+time_mposj = zeros(length(m),1);
+time_dgesvj = zeros(length(m),1);
+time_dgejsv = zeros(length(m),1);
+time_matlab = zeros(length(m),1);
 
-for mode = 1:5
+for i = 1:length(m)
 
-    for i = 1:length(m)
+    mm = m(i);
+    nn = n(i);
+    A = gallery('randsvd', [mm,nn], 1e8, 3);
 
-        mm = m(i);
-        nn = n;
-        A = gallery('randsvd', [mm,nn], kappa, mode);
+    % Our algorithm 
+    tic_mposj_tmp1 = tic;
+    [~,~,~,~,~,timing_tmp1] = mposj(A);
+    tic_mposj_tmp1 = toc(tic_mposj_tmp1);
+    tic_mposj_tmp2 = tic;
+    [U,S,V,nos,scalecond,timing_tmp2] = mposj(A);
+    tic_mposj_tmp2 = toc(tic_mposj_tmp2);
+    mposj_disect_timing(i,:) = (timing_tmp1 + timing_tmp2)/2;
+    time_mposj(i) = (tic_mposj_tmp1 + tic_mposj_tmp2)/2;
 
-        [U1,S1,V1,nos1,scnd] = mposj(A);
-        [f1(i,mode),~,~,~] = compute_error(A, U1, S1, V1);
-
-        [U2,S2,V2,sva2,work2,info2] = dgesvj_mex(A,'G','U','V',nn,eye(nn),max(6,mm+nn));
-        if info2 ~= 0
-            fprintf("Error: DGESVJ does not converge.\n");
-            break;
-        end
-        [f2(i,mode),~,~,~] = compute_error(A, U2, S2, V2);
-
-        [U3,S3,V3,sva3,work3,iwork3,info3] = dgejsv_mex(A,'C','U','V','R','N','N');
-        if info3 ~= 0
-            fprintf("Error: DGEJSV does not converge.\n");
-            break;
-        end
-        [f3(i,mode),~,~,~] = compute_error(A, U3, S3, V3);
-
-        [U4,S4,V4] = svd(A,'econ');
-        [f4(i,mode),~,~,~] = compute_error(A, U4, S4, V4);
-
-        bound1(i,mode) = scond(A) * sqrt(mm * nn)* epsln;
-        bound2(i,mode) = scnd * sqrt(mm * nn) * epsln;
-
-        fprintf("Finished MODE = %d, %d of %d\n", mode, i, length(m));
-
-    end
-end
-
-if savedata == 1
-    save("./data/fwderr_diff_size.mat")
-end
-
-
-%% 
-close all; 
-figure(99);
-set(gcf, 'Units','inches', 'Position',[1 1 11 17.5]);  % [left bottom width height]
-
-okabeito = [
-    0.000 0.000 0.000  % black
-    0.902 0.624 0.000  % orange
-    0.337 0.706 0.914  % sky blue
-    0.000 0.620 0.451  % bluish green
-    0.941 0.894 0.259  % yellow
-    0.000 0.447 0.698  % blue
-    0.835 0.369 0.000  % vermillion
-    0.800 0.475 0.655  % reddish purple
-];
-
-for mode = 1:5
-    subplot(3,2,mode);
-    ax = gca; 
-    ax.ColorOrder = okabeito;
+    % Use the two precision version to get a standard for double precision
+    % preconditioning process.
+    [~,~,~,~,~,timing_twoprec_tmp1] = mposj(A,2);
+    [~,~,~,~,~,timing_twoprec_tmp2] = mposj(A,2);
+    time_mposj_twoprec(i,:) = (timing_twoprec_tmp1 + timing_twoprec_tmp2)/2;
     
-    %%%
-    loglog(m,f1(:,mode),'LineStyle','-','Marker','*');
-    hold on;
-    loglog(m,f2(:,mode),'LineStyle','-','Marker','x');
-    loglog(m,f3(:,mode),'LineStyle','-','Marker','square');
-    loglog(m,f4(:,mode),'LineStyle','-','Marker','diamond');
-    loglog(m,bound1(:,mode),'LineStyle','--','Marker','^','Color','k');
-    loglog(m,bound2(:,mode),'LineStyle','-.','Marker','o','Color','k');
-    %%%
+    % DGESVJ (plain Jacobi)
+    tic_dgesvj_tmp1 = tic;
+    dgesvj_mex(A,'G','U','V',nn,eye(nn),max(6,mm+nn));
+    tic_dgesvj_tmp1 = toc(tic_dgesvj_tmp1);
+    tic_dgesvj_tmp2 = tic;
+    dgesvj_mex(A,'G','U','V',nn,eye(nn),max(6,mm+nn));
+    tic_dgesvj_tmp2 = toc(tic_dgesvj_tmp2);
+    time_dgesvj(i) = (tic_dgesvj_tmp1 + tic_dgesvj_tmp2)/2;
 
-    axis square
-    xticks([500, 1000, 1750, 3000]);
-    xlabel('Number of row');
-    set(findall(gcf, 'Type', 'Line'), 'LineWidth', 2);
+    % DGEJSV (preconditioned Jacobi)
+    tic_dgejsv_tmp1 = tic;
+    dgejsv_mex(A,'C','U','V','R','N','N');
+    tic_dgejsv_tmp1 = toc(tic_dgejsv_tmp1);
+    tic_dgejsv_tmp2 = tic;
+    dgejsv_mex(A,'C','U','V','R','N','N');
+    tic_dgejsv_tmp2 = toc(tic_dgejsv_tmp2);
+    time_dgejsv(i) = (tic_dgejsv_tmp1 + tic_dgejsv_tmp2)/2;
 
-    % Set the title 
-    alphabet = ['a','b','c','d','e'];
-    t = sprintf('(%s) MODE = %d', alphabet(mode), mode); 
-    title(t, 'FontWeight', 'normal'); 
+    % MATLAB SVD
+    tic_matlab_tmp1 = tic;
+    svd(A,'econ');
+    tic_matlab_tmp1 = toc(tic_matlab_tmp1);
+    tic_matlab_tmp2 = tic;
+    svd(A,'econ');
+    tic_matlab_tmp2 = toc(tic_matlab_tmp2);
+    t_matlab(i) = (tic_matlab_tmp1 + tic_matlab_tmp2)/2;
 
-    % Only get ylabel if the subplot is on the left
-    if mod(mode,2) == 1
-        ylabel('$\mathrm{max}_k {\varepsilon}^{(k)}_{fwd}$', ...
-            'Interpreter', 'latex');
-    end
+    fprintf("Finished %d of %d \n", i, length(n));
 
-    % Set legend for the fifth one
-    if mode == 5
-        L = legend('MP3JacobiSVD', ...
-            '\texttt{DGESVJ}', ...
-            '\texttt{DGEJSV}', ...
-            'MATLAB \texttt{svd}', ...
-            '$(mn)^{1/2}u\kappa_2^S(A)$', ...
-            '$(mn)^{1/2}u\kappa_2^S(\tilde{A})$', ...
-            'Interpreter','latex');
-        
-        ax(6) = subplot(3,2,6);
-        set(ax(6),'Visible','off'); box(ax(6),'off');
+end
 
-        set([L ax(6)],'Units','normalized');
-        lp = L.Position;       
-        tp = ax(6).Position;    
-        lp(1) = tp(1) + (tp(3)-lp(3))/2;   
-        lp(2) = tp(2) + (tp(4)-lp(4))/2;   
-        L.Position = lp;
-    end
+savedata = 0;
+if savedata == 1
+    save('data/timing.mat');
 end
 
 %%
-if printout == 1
-    myprint('fwderr_diff_size_cond_1e8', 1);
-end
+close all; 
+
+C1 = "#1171BE";
+C2 = "#DD5400";
+C3 = "#EDB120";
+C4 = "#3BAA32";
+
+figure(1);
+
+% a special potential time for mposj 
+time_mposj_potential = time_mposj - mposj_disect_timing(:,2) + 100 * time_mposj_twoprec(:,2); 
+
+
+loglog(n, time_mposj,'LineStyle','none','Marker','*','Color',C1); hold on;
+loglog(n, time_dgesvj,'LineStyle','none','Marker','pentagram','Color',C2);
+loglog(n, time_dgejsv,'LineStyle','none','Marker','square','Color',C3);
+loglog(n, t_matlab,'LineStyle','none','Marker','diamond','Color',C4);
+
+set(findall(gcf, 'Type', 'Line'), 'LineWidth', 1);
+xlabel('Number of columns', 'FontSize', 10); 
+ylabel('Runtime (sec)', 'FontSize', 10); 
+
+% legend({'MP3JacobiSVD', ...
+%     '\texttt{DGESVJ}', ...
+%     '\texttt{DGEJSV}', ...
+%     'MATLAB \texttt{svd}'}, ...
+%     'Location', 'southeast', 'FontSize', 10);
+% legend('boxoff')
+
+%
+figure(2)
+loglog(n, mposj_disect_timing(:,2)./time_mposj_twoprec(:,2),'LineStyle','none','Marker', '<', 'Color', 'Black');
+xlabel('Number of columns', 'FontSize', 10); 
+ylabel('Runtime (sec)', 'FontSize', 10); 
+
+%
+figure(3)
+loglog(n, mposj_disect_timing(:,3),'LineStyle','none','Marker','*','Color',C1); hold on; 
+loglog(n, time_dgesvj,'LineStyle','none','Marker','pentagram','Color',C2);
+xlabel('n');
+ylabel('Runtime (sec)')
+
+%
+figure(4)
+loglog(n, time_mposj_potential./time_dgejsv,'LineStyle','none','Marker', '>', 'Color', 'Black'); hold on;
+loglog(n, time_dgesvj./time_dgejsv,'LineStyle','none','Marker','pentagram','Color',C2);
+xlabel('n');
+ylabel('Runtime (sec)')

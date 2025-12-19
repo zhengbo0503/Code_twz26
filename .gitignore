@@ -3,3 +3,5 @@ data/*
 get_*/*
 *.mexmaca64
 .DS_Store
+*.pdf
+*.tex
