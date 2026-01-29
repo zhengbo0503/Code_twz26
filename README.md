@@ -1,7 +1,8 @@
 # Code_twz26
-Version: January 29, 2026
+Version: January 29, 2026  
+Description: MATLAB codes for paper "*Computing accurate singular values using a mixed-precision one-sided Jacobi algorithm*" by Zhengbo Zhou, Françoise Tisseur, and Marcus Webb. 
 
-## Usage 
+## 1. Usage 
 These codes has been tested in the following configuration:
 ```
 OS: macOS 26.0.1 25A362 arm64 
@@ -11,15 +12,19 @@ Memory: 36864MiB
 MATLAB version: 25.2.0.3042426 (R2025b) Update 1
 ```
 
-## Requirements 
+## 2. Requirements 
 To run the code, you need the following setup:
-### [Advanpix Multiprecision Computing Toolbox](https://www.advanpix.com/)
+
+### (1) [Anymatrix](https://github.com/north-numerical-computing/anymatrix)
+We are using version 1.4. 
+
+### (2) [Advanpix Multiprecision Computing Toolbox](https://www.advanpix.com/)
 You inevitably need some packages to simulate the quadruple precision. 
 For our project, we chose to use **Advanpix (Version 1.4)**. 
 If you use other packages, such as `vpa()` in the MATLAB Symbolic Math Toolbox,
 you need to change all occurance of `mp()` in this repo to the desired command.
 
-### MEX facilities for LAPACK SVD routines
+### (3) MEX facilities for LAPACK SVD routines
 In order to compile files 
  - `sgesvj_mex.mexmaca64`,
  - `dgesvj_mex.mexmaca64`,
@@ -27,7 +32,7 @@ In order to compile files
  - `dgejsv_mex.mexmaca64`,
 
 you need to run the the following build files in the corresponding folder.
-#### Example compilation of `sgesvj`
+#### (i) Example compilation of `sgesvj`
 > **Warning**: This example is only for macOS system. and for other systems, you may need to change the compilation commands in `build_sgesvj_mex.m`.
 
 Before compiling, you need the following two installations:
@@ -51,16 +56,20 @@ Once you update this part, you can run `build_sgesvj_mex.m` in MATLAB command wi
 You will get `sgesvj_mex.mexmaca64` in the folder `get_sgesvj`. Move it to the main folder
 `Code_twz26`, then you are good to go. 
 
-## Codes description
+## 3. Codes description
 - The main algorithm is
    [`mposj.m`](https://github.com/zhengbo0503/Code_twz26/blob/main/mposj.m)
    which implements our algorithm with (single, double, quadruple) setting. 
 - Another implementation of our algorithm using (single, single, double)
    setting is
    [`mposj_ssd`](https://github.com/zhengbo0503/Code_twz26/blob/main/mposj_ssd.m). 
-- `testx.m` are different tests for our paper. 
+- `test1.m`: (*Figure 1*) accuracy tests for random matrices with varying condition numbers. 
+- `test2.m`: (*Figure 2*) accuracy tests for random matrices with varying number of columns.
+- `test3.m`: (*Figure 3*) accuracy tests for matrices from Anymatrix. 
+- `test4.m`: (*Figure 4*) timing tests for random matrices with varying number of columns.
+- `test5.m`: (*Figure 5*) timing tests for random matrices using `mposj_ssd`.
 
-## Quick Example 
+## 4. Quick Example 
 To run a quick example of our algorithm, you can run the following code in MATLAB command window:
 ```matlab
 clc; 
