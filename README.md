@@ -1,5 +1,5 @@
 # Code_twz26
-Version: December 19, 2025
+Version: January 29, 2026
 
 ## Usage 
 These codes has been tested in the following configuration:
@@ -12,17 +12,62 @@ MATLAB version: 25.2.0.3042426 (R2025b) Update 1
 ```
 
 ## Requirements 
-To run the code, you need 
- - [Advanpix Multiprecision Computing Toolbox](https://www.advanpix.com/)
-   to simulate quadruple precision in MATLAB,
- - [OpenBLAS](https://github.com/OpenMathLib/OpenBLAS) to compile a MEX
-   file for `DGESVJ` and `DGEJSV`.
-   
+To run the code, you need the following setup:
+### [Advanpix Multiprecision Computing Toolbox](https://www.advanpix.com/)
+You inevitably need some packages to simulate the quadruple precision. 
+For our project, we chose to use **Advanpix (Version 1.4)**. 
+If you use other packages, such as `vpa()` in the MATLAB Symbolic Math Toolbox,
+you need to change all occurance of `mp()` in this repo to the desired command.
+
+### MEX facilities for LAPACK SVD routines
+In order to compile files 
+ - `sgesvj_mex.mexmaca64`,
+ - `dgesvj_mex.mexmaca64`,
+ - `sgejsv_mex.mexmaca64`, and 
+ - `dgejsv_mex.mexmaca64`,
+
+you need to run the the following build files in the corresponding folder.
+#### Example compilation of `sgesvj`
+> **Warning**: This example is only for macOS system. and for other systems, you may need to change the compilation commands in `build_sgesvj_mex.m`.
+
+Before compiling, you need the following two installations:
+- [OpenBLAS](https://github.com/OpenMathLib/OpenBLAS):
+We are using `OpenBLAS 0.3.29.dev`.
+- [gfortran](https://fortran-lang.org/learn/os_setup/install_gfortran/): 
+We are using `GNU Fortran 15.1.0 (Homebrew GCC 15.1.0)`.
+
+Then, open the folder `get_sgesvj`, there are three files within the folder
+- `sgesvj_mex.c`: the main c file for compiling the MEX file.
+- `mex.h`: dependency for `sgesvj_mex.c`.
+- `build_sgesvj_mex.m`: the setup file for `sgesvj_mex`.
+
+Before run `build_sgesvj_mex.m` in MATLAB command window, you should specify
+the settings in the file:
+```matlab
+openblas_lib = '/opt/homebrew/opt/openblas/lib';
+gfortran_lib = '/opt/homebrew/Cellar/gcc/15.1.0/lib/gcc/15'
+```
+Once you update this part, you can run `build_sgesvj_mex.m` in MATLAB command window.
+You will get `sgesvj_mex.mexmaca64` in the folder `get_sgesvj`. Move it to the main folder
+`Code_twz26`, then you are good to go. 
+
 ## Codes description
- - The main algorithm is
+- The main algorithm is
    [`mposj.m`](https://github.com/zhengbo0503/Code_twz26/blob/main/mposj.m)
    which implements our algorithm with (single, double, quadruple) setting. 
- - Another implementation of our algorithm using (single, single, double)
+- Another implementation of our algorithm using (single, single, double)
    setting is
    [`mposj_ssd`](https://github.com/zhengbo0503/Code_twz26/blob/main/mposj_ssd.m). 
- - `testx.m` are different tests for our paper. 
+- `testx.m` are different tests for our paper. 
+
+## Quick Example 
+To run a quick example of our algorithm, you can run the following code in MATLAB command window:
+```matlab
+clc; 
+m = 100; n = 80; 
+A = randn(m,n); 
+[U,S,V] = mposj(A); 
+fprintf('Backward error: %e\n', norm(A - U*S*V', 'fro') / norm(A, 'fro'));
+fprintf('Orthogonality of U: %e\n', norm(U'*U - eye(n), 'fro'));
+fprintf('Orthogonality of V: %e\n', norm(V'*V - eye(n), 'fro'));
+```

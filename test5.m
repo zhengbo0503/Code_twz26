@@ -10,14 +10,16 @@ time_mposj = zeros(length(m),1);
 time_sgesvj = zeros(length(m),1);
 time_sgejsv = zeros(length(m),1);
 time_matlab = zeros(length(m),1);
+warmup_matrix = gallery('randsvd', [10, 5], 1e6, 3, 'single');
 
 for i = 1:length(m)
 
     mm = m(i);
     nn = n(i);
-    A = gallery('randsvd', [mm,nn], 1e8, 3, 'single');
+    A = gallery('randsvd', [mm,nn], 1e6, 3, 'single');
 
     % Our algorithm 
+    mposj_ssd(warmup_matrix); % preload function 
     tic_mposj_tmp1 = tic;
     [~,~,~,~,~] = mposj_ssd(A);
     tic_mposj_tmp1 = toc(tic_mposj_tmp1);
@@ -28,6 +30,7 @@ for i = 1:length(m)
     [f1(i),~,~,~] = compute_error_temp(A, U1, S1, V1);
     
     % SGESVJ (plain Jacobi)
+    sgesvj_mex(warmup_matrix, 'G', 'U', 'V', size(warmup_matrix, 2), eye(size(warmup_matrix, 2),'single'), size(warmup_matrix,1)+size(warmup_matrix,2)); 
     tic_sgesvj_tmp1 = tic;
     [~,~,~,~,~,~] = sgesvj_mex(A,'G','U','V',nn,eye(nn,'single'),max(6,mm+nn));
     tic_sgesvj_tmp1 = toc(tic_sgesvj_tmp1);
@@ -42,6 +45,7 @@ for i = 1:length(m)
     [f2(i),~,~,~] = compute_error_temp(A, U2, S2, V2);
 
     % DGEJSV (preconditioned Jacobi)
+    sgejsv_mex(warmup_matrix,'C','U','V','R','N','N');
     tic_sgejsv_tmp1 = tic;
     sgejsv_mex(A,'C','U','V','R','N','N');
     tic_sgejsv_tmp1 = toc(tic_sgejsv_tmp1);
@@ -84,7 +88,7 @@ loglog(n,bound2,'LineStyle',':','Marker','none','Color','k');
 legend('MP3JacobiSVD', 'SGESVJ', 'SGEJSV', 'Bound');
 set(findall(gcf, 'Type', 'Line'), 'LineWidth', 1);
 xlabel('$n$', 'FontSize', 10);
-ylabel('$\mathrm{max}_k {\varepsilon}^{(k)}_{fwd}$', 'FontSize', 10);
+ylabel('$\mathrm{max}_k {\varepsilon}^{(k)}_{fwd}$', 'FontSize', 10, 'Interpreter', 'latex');
 ylim([1e-7, 10]);
 
 figure(2)
