@@ -1,9 +1,9 @@
 # Code_twz26
-Version: January 29, 2026  
-Description: MATLAB codes for paper "*Computing accurate singular values using a mixed-precision one-sided Jacobi algorithm*" by Zhengbo Zhou, Françoise Tisseur, and Marcus Webb. 
 
-## 1. Usage 
-These codes has been tested in the following configuration:
+## 1. Description
+Version: January 29, 2026  
+Description: MATLAB codes for paper "*Computing accurate singular values using a mixed-precision one-sided Jacobi algorithm*" by Zhengbo Zhou, Françoise Tisseur, and Marcus Webb.   
+This repository has been tested in the following configuration:
 ```
 OS: macOS 26.0.1 25A362 arm64 
 CPU: Apple M3 Pro 
